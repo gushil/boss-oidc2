@@ -111,11 +111,14 @@ def get_user_by_id(request, userinfo):
 
     access_token = get_access_token(request)
     audience = get_token_audience(access_token)
-    if not token_audience_is_valid(audience):
-        return None
-    return get_user_with_id(access_token, userinfo)
+    # if not token_audience_is_valid(audience):
+    #     return None
 
-def get_user_with_id(access_token, userinfo):
+    subdomain = request.session["subdomain"]
+
+    return get_user_with_id(access_token, userinfo, subdomain)
+
+def get_user_with_id(access_token, userinfo, subdomain=None):
     """Common functionality for getting or creating the user.  Used by both
     mozilla_django_oidc and drf-oidc-auth.
 
@@ -132,8 +135,10 @@ def get_user_with_id(access_token, userinfo):
     """
     UserModel = get_user_model()
     uid = userinfo['sub']
-    username = userinfo['preferred_username']
-
+    usersubdomain = subdomain
+    username = userinfo['preferred_username'] + "+" + usersubdomain
+    usertype = userinfo['https://www.openclinica.com/userContext']['userType']
+    
     check_username(username)
 
     # Some OP may actually choose to withhold some information, so we must test if it is present
@@ -157,9 +162,9 @@ def get_user_with_id(access_token, userinfo):
     #          user account.
 
     try: # try to lookup by keycloak UID first
-        kc_user = KeycloakModel.objects.get(UID = uid)
+        kc_user = KeycloakModel.objects.get(UID = uid, subdomain = usersubdomain)
         user = kc_user.user
-    except KeycloakModel.DoesNotExist: # user doesn't exist with a keycloak UID
+    except KeycloakModel.DoesNotExist: # user doesn't exist with a keycloak UID and subdomain
         try:
             user = UserModel.objects.get_by_natural_key(username)
 
@@ -176,7 +181,10 @@ def get_user_with_id(access_token, userinfo):
 
         args = {UserModel.USERNAME_FIELD: username, 'defaults': openid_data, }
         user, created = UserModel.objects.update_or_create(**args)
-        kc_user = KeycloakModel.objects.create(user = user, UID = uid)
+        kc_user = KeycloakModel.objects.create(user = user, UID = uid, subdomain = usersubdomain)
+        if kc_user:
+            kc_user.user_type = usertype
+            kc_user.save()
 
     roles = get_roles(access_token)
     user.is_staff = 'admin' in roles or 'superuser' in roles
