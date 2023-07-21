@@ -4,7 +4,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('bossoidc2', '0001_initial'),
+        ('bossoidc2', '0002_auto_20201110_2129'),
     ]
 
     operations = [
